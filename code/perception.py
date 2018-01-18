@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import matplotlib.pyplot as plt
 
 # Identify pixels above the threshold
 # Threshold of RGB > 160 does a nice job of identifying ground pixels only
@@ -80,6 +81,37 @@ def perspect_transform(img, src, dst):
 
 # Apply the above functions in succession and update the Rover state accordingly
 def perception_step(Rover):
+    image = Rover.img
+
+    # Transform Perspective to top down view.
+    source = np.float32([[ 14, 140], [ 302, 140], [ 200, 95], [ 118, 95]])
+    destination_size = 5
+    bottom_offset = 6
+    destination = np.float32([[image.shape[1]/2 - destination_size, image.shape[0] - bottom_offset], 
+                    [image.shape[1]/2 + destination_size, image.shape[0] - bottom_offset], 
+                    [image.shape[1]/2 + destination_size, image.shape[0] - 2 * destination_size - bottom_offset], 
+                    [image.shape[1]/2 - destination_size, image.shape[0] - 2 * destination_size - bottom_offset]])
+    image_perspective = perspect_transform(image, source, destination)
+
+    # Color Transform
+    image_color_transform_ground = color_thresh(image_perspective)
+    image_color_transform_walls = np.zeros_like(image_color_transform_ground)
+    showWalls = image_color_transform_ground[: ,:] == 0
+    image_color_transform_walls[showWalls] = 1
+    Rover.vision_image[:,:,0] = image_color_transform_walls * 255
+    Rover.vision_image[:,:,2] = image_color_transform_ground * 255
+
+    # converting to rover-centric coords
+    xpix, ypix = rover_coords(image_color_transform_ground)
+
+    # Converting to world coordinates
+    scale = 10
+    world_size = 200
+    x_world, y_world = pix_to_world(xpix, ypix, Rover.pos[0], 
+                                Rover.pos[1], Rover.yaw, 
+                                world_size, scale)
+    Rover.worldmap[y_world, x_world,] += 1
+
     # Perform perception steps to update Rover()
     # TODO: 
     # NOTE: camera image is coming to you in Rover.img
