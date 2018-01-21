@@ -1,6 +1,7 @@
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+import matplotlib.image as mpimg
 
 # Identify pixels above the threshold
 # Threshold of RGB > 160 does a nice job of identifying ground pixels only
@@ -16,6 +17,14 @@ def color_thresh(img, rgb_thresh=(160, 160, 160)):
     # Index the array of zeros with the boolean array and set to 1
     color_select[above_thresh] = 1
     # Return the binary image
+    return color_select
+
+def rock_threshold(img, rgb_thresh=(100, 100, 15)):
+    above_thresh = (img[:,:,0] > rgb_thresh[0]) \
+                & (img[:,:,1] > rgb_thresh[1]) \
+                & (img[:,:,2] < rgb_thresh[2])
+    color_select = np.zeros_like(img[:,:,0])
+    color_select[above_thresh] = 1
     return color_select
 
 # Define a function to convert from image coords to rover coords
@@ -78,11 +87,10 @@ def perspect_transform(img, src, dst):
     
     return warped
 
-
 # Apply the above functions in succession and update the Rover state accordingly
 def perception_step(Rover):
     image = Rover.img
-
+    # image = mpimg.imread('C:/Users/joero/Documents/Development/Udacity/RoboticsNanodegree/roversim/IMG/IMG/robocam_2018_01_21_17_36_06_369.jpg')
     # Transform Perspective to top down view.
     source = np.float32([[ 14, 140], [ 302, 140], [ 200, 95], [ 118, 95]])
     destination_size = 5
@@ -98,20 +106,42 @@ def perception_step(Rover):
     image_color_transform_walls = np.zeros_like(image_color_transform_ground)
     showWalls = image_color_transform_ground[: ,:] == 0
     image_color_transform_walls[showWalls] = 1
+    image_color_transform_rocks = rock_threshold(image_perspective)
+
     Rover.vision_image[:,:,0] = image_color_transform_walls * 255
+    Rover.vision_image[:,:,1] = image_color_transform_rocks * 255
     Rover.vision_image[:,:,2] = image_color_transform_ground * 255
 
     # converting to rover-centric coords
-    xpix, ypix = rover_coords(image_color_transform_ground)
+    xpix_ground, ypix_ground = rover_coords(image_color_transform_ground)
+    xpix_walls, ypix_walls = rover_coords(image_color_transform_walls)
 
     # Converting to world coordinates
     scale = 10
     world_size = 200
-    x_world, y_world = pix_to_world(xpix, ypix, Rover.pos[0], 
+    x_world_ground, y_world_ground = pix_to_world(xpix_ground, ypix_ground, Rover.pos[0], 
                                 Rover.pos[1], Rover.yaw, 
                                 world_size, scale)
-    Rover.worldmap[y_world, x_world,] += 1
+    x_world_walls, y_world_walls = pix_to_world(xpix_walls, ypix_walls, Rover.pos[0], 
+                                Rover.pos[1], Rover.yaw, 
+                                world_size, scale)
 
+    Rover.worldmap[y_world_walls, x_world_walls, 0] += 1
+    Rover.worldmap[y_world_ground, x_world_ground, 2] += 1
+
+    distances, angles = to_polar_coords(x_world_ground, y_world_ground) # Convert to polar coords
+    avg_angle = np.mean(angles) # Compute the average angle
+
+    Rover.nav_angles = angles # Angles of navigable terrain pixels
+    Rover.nav_dists = distances
+    
+    if(image_color_transform_rocks.any()):
+        xpix_rock, ypix_rock = rover_coords(image_color_transform_rocks)
+        x_world_rock, y_world_rock = pix_to_world(xpix_rock, ypix_rock, Rover.pos[0], 
+                                    Rover.pos[1], Rover.yaw, 
+                                    world_size, scale)
+        
+        Rover.worldmap[x_world_rock, y_world_rock, 1] += 1  
     # Perform perception steps to update Rover()
     # TODO: 
     # NOTE: camera image is coming to you in Rover.img
@@ -139,3 +169,4 @@ def perception_step(Rover):
     
     
     return Rover
+
