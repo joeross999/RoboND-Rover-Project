@@ -90,7 +90,6 @@ def perspect_transform(img, src, dst):
 # Apply the above functions in succession and update the Rover state accordingly
 def perception_step(Rover):
     image = Rover.img
-    # image = mpimg.imread('C:/Users/joero/Documents/Development/Udacity/RoboticsNanodegree/roversim/IMG/IMG/robocam_2018_01_21_17_36_06_369.jpg')
     # Transform Perspective to top down view.
     source = np.float32([[ 14, 140], [ 302, 140], [ 200, 95], [ 118, 95]])
     destination_size = 5
@@ -126,10 +125,10 @@ def perception_step(Rover):
                                 Rover.pos[1], Rover.yaw, 
                                 world_size, scale)
 
-    Rover.worldmap[y_world_walls, x_world_walls, 0] += 1
+    Rover.worldmap[y_world_walls, x_world_walls, 0] = 255
     Rover.worldmap[y_world_ground, x_world_ground, 2] += 1
 
-    distances, angles = to_polar_coords(x_world_ground, y_world_ground) # Convert to polar coords
+    distances, angles = to_polar_coords(xpix_ground, ypix_ground) # Convert to polar coords
     avg_angle = np.mean(angles) # Compute the average angle
 
     Rover.nav_angles = angles # Angles of navigable terrain pixels
@@ -140,8 +139,16 @@ def perception_step(Rover):
         x_world_rock, y_world_rock = pix_to_world(xpix_rock, ypix_rock, Rover.pos[0], 
                                     Rover.pos[1], Rover.yaw, 
                                     world_size, scale)
+        rock_dist, rock_ang = to_polar_coords(xpix_rock, ypix_rock)
+        rock_idx = np.argmin(rock_dist)
+        rock_xcen = x_world_rock[rock_idx]
+        rock_ycen = y_world_rock[rock_idx]
+
+        Rover.worldmap[rock_xcen, rock_ycen, :] = 255  
         
-        Rover.worldmap[x_world_rock, y_world_rock, 1] += 1  
+
+
+
     # Perform perception steps to update Rover()
     # TODO: 
     # NOTE: camera image is coming to you in Rover.img
